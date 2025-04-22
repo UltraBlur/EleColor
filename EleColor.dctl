@@ -1,0 +1,57 @@
+// EleColor 1.0
+
+// Original concept by WaveChaser and HikariDragon
+// Distributed under the GPL 3.0 license.
+
+
+// Range control
+DEFINE_UI_PARAMS(inputGain, Transmittance Gain,  DCTLUI_SLIDER_FLOAT, 1.0,  0.0, 5.0, 0.020)
+DEFINE_UI_PARAMS(denGain,   Density Gain,   DCTLUI_SLIDER_FLOAT, 0.0, -1.0, 1.0, 0.001)
+DEFINE_UI_PARAMS(denOffset,  Density Offset,  DCTLUI_SLIDER_FLOAT,    0.0, -2.0, 2.0, 0.001)
+
+DEFINE_UI_PARAMS(r_offset, R Offset, DCTLUI_SLIDER_FLOAT, 0.0, -2.0, 2.0, 0.01)
+DEFINE_UI_PARAMS(g_offset, G Offset, DCTLUI_SLIDER_FLOAT, 0.0, -2.0, 2.0, 0.01)
+DEFINE_UI_PARAMS(b_offset, B Offset, DCTLUI_SLIDER_FLOAT, 0.0, -2.0, 2.0, 0.01)
+
+// Cineon lift
+DEFINE_UI_PARAMS(postLift,  Fit to Cineon Base, DCTLUI_CHECK_BOX, 1)
+
+
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B)
+{
+
+    // Determines if inversion is needed and scales gain based on process mode.
+    float inputScale = 16.0f;
+	float invScale   = -1.0f;
+
+    // Converts transmittance to density by performing a log10f()
+    float r_init = invScale * (_log10f(inputScale * p_R));
+    float g_init = invScale * (_log10f(inputScale * p_G));
+    float b_init = invScale * (_log10f(inputScale * p_B));
+
+    r_init = (r_init * inputGain) + 1.0f;
+    g_init = (g_init * inputGain) + 1.0f;
+    b_init = (b_init * inputGain) + 1.0f;
+
+    // Applies independent channel shift and master shift.
+    float r_1 = r_init + r_offset + denOffset;
+    float g_1 = g_init + g_offset + denOffset;
+    float b_1 = b_init + b_offset + denOffset;
+
+    // Scales each channel and lifts blackpoints
+    float r_final = r_1 / (1.0f - denGain);
+    float g_final = g_1 / (1.0f - denGain);
+    float b_final = b_1 / (1.0f - denGain);
+
+    // Applies Cineon base
+    if (postLift)
+    {
+        const float cineonBase = 95.0f/1023.0f;
+        r_final = (r_final + cineonBase) / (1.0f + cineonBase);
+        g_final = (g_final + cineonBase) / (1.0f + cineonBase);
+        b_final = (b_final + cineonBase) / (1.0f + cineonBase);
+    }
+    
+    return make_float3(r_final, g_final, b_final);
+}
